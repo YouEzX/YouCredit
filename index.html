@@ -56,6 +56,23 @@
     /* Modal foto */
     .modal{display:none;position:fixed;z-index:999;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,.8);align-items:center;justify-content:center}
     .modal img{max-width:90%;max-height:90%;border-radius:12px}
+
+    #formModal {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  left: 0; top: 0;
+  width: 100%; height: 100%;
+  background: rgba(0,0,0,.6);
+  align-items: center;
+  justify-content: center;
+}
+
+#formModal .card {
+  max-width: 600px;
+  width: 100%;
+}
+
   </style>
 </head>
 <body>
@@ -94,7 +111,8 @@
       </section>
 
       <!-- Detalle / Formulario -->
-      <section class="card" id="detailCard" style="display:none">
+      <div class="modal" id="formModal">
+  <section class="card" id="detailCard">
         <h3 id="detailTitle">Nuevo préstamo</h3>
 
         <div class="section" id="formSection">
@@ -238,10 +256,20 @@
       }
     }
 
-    function newLoan(){currentId=null;$('#detailCard').style.display='block';$('#deleteBtn').style.display='none';$('#summarySection').style.display='none';
-      $('#nameInput').value='';$('#cedulaInput').value='';$('#amountInput').value='';$('#dueDateInput').value=todayStr();
-      $('#phoneInput').value='';$('#locationInput').value='';$('#notesInput').value='';$('#photoInput').value='';
-    }
+function newLoan(){
+  currentId=null;
+  $('#formModal').style.display='flex'; // abrir modal
+  $('#deleteBtn').style.display='none';
+  $('#summarySection').style.display='none';
+  $('#nameInput').value='';
+  $('#cedulaInput').value='';
+  $('#amountInput').value='';
+  $('#dueDateInput').value=todayStr();
+  $('#phoneInput').value='';
+  $('#locationInput').value='';
+  $('#notesInput').value='';
+  $('#photoInput').value='';
+}
 
     async function handlePhotoFile(file){if(!file)return null;return new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result);r.readAsDataURL(file);});}
 
@@ -256,7 +284,8 @@
     }
 
     function openDetail(id){
-      const l=loans.find(x=>x.id===id); if(!l)return; currentId=id;$('#detailCard').style.display='block';$('#deleteBtn').style.display='inline-block';$('#summarySection').style.display='block';
+      const l=loans.find(x=>x.id===id); if(!l)return; currentId=id;$('#formModal').style.display='flex';
+$('#deleteBtn').style.display='inline-block';$('#summarySection').style.display='block';
       $('#nameInput').value=l.name;$('#cedulaInput').value=l.cedula;$('#amountInput').value=l.amount;$('#dueDateInput').value=l.dueDate;
       $('#phoneInput').value=l.phone||'';$('#locationInput').value=l.location||'';$('#notesInput').value=l.notes||'';$('#photoInput').value='';
       const paid=(l.payments||[]).reduce((a,p)=>a+Number(p.amount),0),balance=Math.max(0,l.amount-paid);
@@ -298,7 +327,8 @@
       const l=loans.find(x=>x.id===currentId);
       if(confirm(`¿Eliminar el préstamo de ${l.name}?`)){
         loans=loans.filter(x=>x.id!==currentId);
-        save();$('#detailCard').style.display='none';
+        save();$('#formModal').style.display='none';
+
       }
     }
 
@@ -318,9 +348,14 @@
       };input.click();
     }
 
-    function clearAll(){
-      if(confirm('¿Eliminar todos los préstamos?')){loans=[];save();$('#detailCard').style.display='none';}
-    }
+function clearAll(){
+  if(confirm('¿Eliminar todos los préstamos?')){
+    loans = [];
+    save();
+    $('#formModal').style.display = 'none';
+  }
+}
+
 
     // Modal foto
     function showPhoto(src){
@@ -331,7 +366,7 @@
     // Eventos
     $('#newLoanBtn').onclick=newLoan;
     $('#saveBtn').onclick=saveLoan;
-    $('#cancelBtn').onclick=()=>$('#detailCard').style.display='none';
+    $('#cancelBtn').onclick=()=>$('#formModal').style.display='none';
     $('#addPaymentBtn').onclick=addPayment;
     $('#deleteBtn').onclick=deleteLoan;
     $('#exportBtn').onclick=exportData;
@@ -342,6 +377,13 @@
     $('#cedulaInput').oninput=()=>$('#cedulaInput').value=formatCedula($('#cedulaInput').value);
 
     load();
+
+// Cerrar modal al hacer clic fuera de la tarjeta
+$('#formModal').onclick = (e) => {
+  if (e.target.id === 'formModal') {
+    $('#formModal').style.display = 'none';
+  }
+};
 
   </script>
 </body>
