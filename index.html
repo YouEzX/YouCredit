@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>Registro de Préstamos | You Credit</title>
+  <style>
+    :root{
+      --bg:#0f1216;--card:#161a20;--muted:#8a94a6;--text:#e8eef7;
+      --primary:#4f8cff;--primary-2:#3a74e0;--accent:#00c2a8;
+      --danger:#ff5c7a;--warning:#ffb84f;--success:#36d399;--ring:#27436f;
+    }
+    *{box-sizing:border-box}
+    body{background:var(--bg);color:var(--text);font-family:system-ui;margin:0}
+    .container{max-width:960px;margin:0 auto;padding:16px}
+    header{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:12px}
+    .brand{display:flex;align-items:center;gap:12px}
+    .logo{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,var(--primary),var(--accent));display:flex;align-items:center;justify-content:center;font-weight:700;color:#0c0f14}
+    .title{font-size:1.1rem;font-weight:700}
+    .subtitle{font-size:.85rem;color:var(--muted)}
+    .actions{display:flex;gap:8px;flex-wrap:wrap}
+    .btn{border:1px solid transparent;background:var(--primary);color:#fff;padding:10px 14px;border-radius:12px;font-weight:600;cursor:pointer}
+    .btn:hover{background:var(--primary-2)}
+    .btn.secondary{background:transparent;border-color:#2a3240;color:var(--text)}
+    .btn.secondary:hover{border-color:#3a4658;background:#1b212a}
+    .btn.danger{background:var(--danger)}
+    .btn.success{background:var(--accent)}
+    .grid{display:grid;gap:12px;grid-template-columns:1fr}
+    @media(min-width:880px){.grid{grid-template-columns:1fr 320px}}
+    .card{background:var(--card);border:1px solid #202633;border-radius:16px;padding:12px}
+    .card h3{margin:4px 0 10px;font-size:1rem}
+    .input,.select{background:#10141a;border:1px solid #202633;color:var(--text);padding:10px 12px;border-radius:12px;width:100%}
+    .input:focus,.select:focus{outline:none;border-color:var(--ring);box-shadow:0 0 0 4px rgba(79,140,255,.15)}
+    .list{display:flex;flex-direction:column;gap:8px}
+    .item{display:flex;gap:10px;padding:10px;border-radius:12px;border:1px solid #202633;background:#121820;align-items:center}
+    .avatar{width:44px;height:44px;border-radius:10px;flex:0 0 44px;background:#0d1117;border:1px solid #273043;overflow:hidden;cursor:pointer}
+    .avatar img{width:100%;height:100%;object-fit:cover}
+    .item-body{flex:1;min-width:0}
+    .item-title{font-weight:700}
+    .item-sub{font-size:.85rem;color:var(--muted)}
+    .item-right{text-align:right;white-space:nowrap}
+    .badge{display:inline-block;padding:4px 8px;border-radius:999px;font-size:.75rem;border:1px solid #2a3240;color:var(--muted)}
+    .badge.success{color:#0be2c0;border-color:#0be2c0}
+    .badge.warning{color:#ffd280;border-color:#ffd280}
+    .badge.danger{color:#ff8fa1;border-color:#ff8fa1}
+    .empty{color:var(--muted);text-align:center;padding:24px;border:1px dashed #2a3240;border-radius:12px}
+    .row{display:grid;grid-template-columns:1fr;gap:10px}
+    @media(min-width:520px){.row.two{grid-template-columns:1fr 1fr}}
+    .label{font-size:.8rem;color:#9aa6b2;margin-bottom:6px}
+    .hint{font-size:.78rem;color:#7e8898}
+    .error{color:#ff8fa1;font-size:.8rem;margin-top:6px}
+    .divider{height:1px;background:#1f2632;margin:10px 0}
+    .pay-list{display:flex;flex-direction:column;gap:8px}
+    .pay-item{display:flex;justify-content:space-between;padding:8px;border:1px solid #263042;border-radius:10px;background:#12161d}
+    footer{color:var(--muted);font-size:.8rem;margin-top:16px;text-align:center}
+    /* Modal foto */
+    .modal{display:none;position:fixed;z-index:999;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,.8);align-items:center;justify-content:center}
+    .modal img{max-width:90%;max-height:90%;border-radius:12px}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="brand">
+        <div class="logo">RD</div>
+        <div>
+          <div class="title">Prestador Local</div>
+          <div class="subtitle">Registro de préstamos personales en tu dispositivo</div>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn" id="newLoanBtn">Nuevo préstamo</button>
+        <button class="btn secondary" id="exportBtn">Exportar</button>
+        <button class="btn secondary" id="importBtn">Importar</button>
+        <button class="btn secondary" id="clearBtn">Limpiar todo</button>
+      </div>
+    </header>
+
+    <div class="grid">
+      <!-- Lista -->
+      <section class="card">
+        <h3>Préstamos</h3>
+        <div class="toolbar">
+          <input id="searchInput" class="input" placeholder="Buscar por nombre o cédula..." />
+          <select id="statusFilter" class="select">
+            <option value="all">Todos</option>
+            <option value="pending">Pendiente</option>
+            <option value="partial">Parcial</option>
+            <option value="paid">Pagado</option>
+          </select>
+        </div>
+        <div id="loanList" class="list"></div>
+        <div id="emptyState" class="empty" style="display:none">Sin préstamos aún. Pulsa “Nuevo préstamo”.</div>
+      </section>
+
+      <!-- Detalle / Formulario -->
+      <section class="card" id="detailCard" style="display:none">
+        <h3 id="detailTitle">Nuevo préstamo</h3>
+
+        <div class="section" id="formSection">
+          <div class="row two">
+            <div>
+              <div class="label">Nombre completo</div>
+              <input class="input" id="nameInput" />
+              <div class="error" id="nameError" style="display:none"></div>
+            </div>
+            <div>
+              <div class="label">Cédula dominicana</div>
+              <input class="input" id="cedulaInput" inputmode="numeric" placeholder="000-0000000-0" />
+              <div class="hint">Formato: ###-#######-#</div>
+              <div class="error" id="cedulaError" style="display:none"></div>
+            </div>
+          </div>
+
+          <div class="row two">
+            <div>
+              <div class="label">Monto prestado (DOP)</div>
+              <input class="input" id="amountInput" inputmode="decimal" />
+              <div class="error" id="amountError" style="display:none"></div>
+            </div>
+            <div>
+              <div class="label">Fecha de cobro</div>
+              <input class="input" id="dueDateInput" type="date" />
+              <div class="error" id="dueDateError" style="display:none"></div>
+            </div>
+          </div>
+
+<div class="row two">
+  <div>
+    <div class="label">Número de teléfono</div>
+    <input class="input" id="phoneInput" inputmode="tel" placeholder="Ej: 8091234567" />
+    <div class="hint">Debe tener al menos 10 dígitos</div>
+    <div class="error" id="phoneError" style="display:none"></div>
+  </div>
+  <div>
+    <div class="label">Ubicación (opcional)</div>
+    <input class="input" id="locationInput" />
+  </div>
+</div>
+
+          <div class="row two">
+            <div>
+              <div class="label">Foto (opcional)</div>
+              <input class="input" id="photoInput" type="file" accept="image/*" />
+              <div class="hint">Se guarda localmente como base64</div>
+            </div>
+            <div>
+              <div class="label">Notas (opcional)</div>
+              <textarea class="input" id="notesInput" rows="3"></textarea>
+            </div>
+          </div>
+
+          <div class="actions" style="margin-top:8px">
+            <button class="btn" id="saveBtn">Guardar</button>
+            <button class="btn secondary" id="cancelBtn">Cancelar</button>
+            <button class="btn danger" id="deleteBtn" style="display:none">Eliminar</button>
+            <button class="btn success" id="whatsappBtn" style="display:none">Ir a WhatsApp</button>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="section" id="summarySection" style="display:none">
+          <div class="row two">
+            <div>
+              <div class="label">Monto prestado</div>
+              <div id="sumAmount" class="item-title">—</div>
+            </div>
+            <div>
+              <div class="label">Saldo</div>
+              <div id="sumBalance" class="item-title">—</div>
+            </div>
+          </div>
+
+          <div class="row two" style="margin-top:8px">
+            <div>
+              <div class="label">Registrar pago (DOP)</div>
+              <input class="input" id="paymentInput" inputmode="decimal" />
+              <div class="error" id="paymentError" style="display:none"></div>
+            </div>
+            <div>
+              <div class="label">Fecha del pago</div>
+              <input class="input" id="paymentDateInput" type="date" />
+            </div>
+          </div>
+          <div class="actions" style="margin-top:8px">
+            <button class="btn success" id="addPaymentBtn">Agregar pago</button>
+          </div>
+
+          <div class="section">
+            <div class="label">Historial de pagos</div>
+            <div id="paymentsList" class="pay-list"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <footer>Fase ALPHA 1.0 | Derechos reservados en YouDevX</footer>
+  </div>
+
+  <!-- Modal para agrandar fotos -->
+  <div class="modal" id="photoModal">
+    <img id="modalImg" src="" alt="Foto ampliada" />
+  </div>
+
+  <script>
+    const $ = sel => document.querySelector(sel);
+    const currency = v => new Intl.NumberFormat('es-DO',{style:'currency',currency:'DOP'}).format(Number(v||0));
+    const todayStr = () => new Date().toISOString().slice(0,10);
+    let loans = []; let currentId = null;
+
+    function load(){ loans = JSON.parse(localStorage.getItem('prestadoor_loans')||'[]'); renderList(); }
+    function save(){ localStorage.setItem('prestadoor_loans', JSON.stringify(loans)); renderList(); }
+
+    function formatCedula(input){
+      let d=input.replace(/\D/g,'').slice(0,11),o='';
+      for(let i=0;i<d.length;i++){o+=d[i];if(i===2&&d.length>3)o+='-';if(i===9&&d.length>10)o+='-';}
+      return o;
+    }
+    function isValidCedula(f){return f.replace(/\D/g,'').length===11;}
+
+    function renderList(){
+      const list=$('#loanList'); list.innerHTML='';
+      if(loans.length===0){$('#emptyState').style.display='block';return;} else $('#emptyState').style.display='none';
+      for(const l of loans){
+        const paid=(l.payments||[]).reduce((a,p)=>a+Number(p.amount),0);
+        const balance=Math.max(0,l.amount-paid);
+        const stat=balance<=0?'paid':paid>0?'partial':'pending';
+        const badgeClass=stat==='paid'?'success':stat==='partial'?'warning':'danger';
+        const item=document.createElement('div'); item.className='item';
+        item.innerHTML=`<div class="avatar">${l.photo?`<img src="${l.photo}">`:''}</div>
+          <div class="item-body"><div class="item-title">${l.name} <span class="badge ${badgeClass}">${stat}</span></div>
+          <div class="item-sub">${l.cedula} · ${l.phone||''}</div></div>
+          <div class="item-right"><div>${currency(balance)}</div></div>`;
+        item.addEventListener('click',()=>openDetail(l.id));
+        if(l.photo){item.querySelector('.avatar').onclick=(e)=>{e.stopPropagation();showPhoto(l.photo);};}
+        list.appendChild(item);
+      }
+    }
+
+    function newLoan(){currentId=null;$('#detailCard').style.display='block';$('#deleteBtn').style.display='none';$('#summarySection').style.display='none';
+      $('#nameInput').value='';$('#cedulaInput').value='';$('#amountInput').value='';$('#dueDateInput').value=todayStr();
+      $('#phoneInput').value='';$('#locationInput').value='';$('#notesInput').value='';$('#photoInput').value='';
+    }
+
+    async function handlePhotoFile(file){if(!file)return null;return new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result);r.readAsDataURL(file);});}
+
+    async function saveLoan(){
+      const name=$('#nameInput').value.trim(),cedula=$('#cedulaInput').value.trim(),amount=Number($('#amountInput').value),dueDate=$('#dueDateInput').value;
+      const phone=$('#phoneInput').value.trim(),location=$('#locationInput').value.trim(),notes=$('#notesInput').value.trim();
+      const photoFile=$('#photoInput').files[0],photo=await handlePhotoFile(photoFile);
+      if(!name||!isValidCedula(cedula)||!(amount>0)||!dueDate||(phone&&phone.replace(/\D/g,'').length<10)){alert('Revisa los campos');return;}
+      if(currentId==null){loans.push({id:Date.now().toString(),name,cedula,amount,dueDate,phone,location,notes,photo:photo||null,payments:[]});}
+      else{const idx=loans.findIndex(l=>l.id===currentId);loans[idx]={...loans[idx],name,cedula,amount,dueDate,phone,location,notes,photo:photo||loans[idx].photo};}
+      save();openDetail(currentId||loans[loans.length-1].id);
+    }
+
+    function openDetail(id){
+      const l=loans.find(x=>x.id===id); if(!l)return; currentId=id;$('#detailCard').style.display='block';$('#deleteBtn').style.display='inline-block';$('#summarySection').style.display='block';
+      $('#nameInput').value=l.name;$('#cedulaInput').value=l.cedula;$('#amountInput').value=l.amount;$('#dueDateInput').value=l.dueDate;
+      $('#phoneInput').value=l.phone||'';$('#locationInput').value=l.location||'';$('#notesInput').value=l.notes||'';$('#photoInput').value='';
+      const paid=(l.payments||[]).reduce((a,p)=>a+Number(p.amount),0),balance=Math.max(0,l.amount-paid);
+      $('#sumAmount').textContent=currency(l.amount);$('#sumBalance').textContent=currency(balance);
+      $('#paymentsList').innerHTML=(l.payments||[]).map(p=>`<div class="pay-item"><div>${new Date(p.date).toLocaleDateString()}</div><div>${currency(p.amount)}</div></div>`).join('');
+      if(l.phone){$('#whatsappBtn').style.display='inline-block';$('#whatsappBtn').onclick=()=>window.open(`https://wa.me/${l.phone.replace(/\\D/g,'')}`,'_blank');}else $('#whatsappBtn').style.display='none';
+    }
+
+  function addPayment() {
+  const l = loans.find(x => x.id === currentId);
+  if (!l) return;
+
+  const amount = Number($('#paymentInput').value);
+  const date = $('#paymentDateInput').value || todayStr();
+
+  if (!(amount > 0)) {
+    alert('Pago inválido');
+    return;
+  }
+
+  const paid = (l.payments || []).reduce((a, p) => a + Number(p.amount), 0);
+  const balance = Math.max(0, l.amount - paid);
+
+  if (amount > balance) {
+    alert('El pago excede el saldo');
+    return;
+  }
+
+  l.payments.push({ amount, date });
+  save();
+  openDetail(currentId);
+  $('#paymentInput').value = '';
+  $('#paymentDateInput').value = '';
+}
+
+
+    function deleteLoan(){
+      if(!currentId)return;
+      const l=loans.find(x=>x.id===currentId);
+      if(confirm(`¿Eliminar el préstamo de ${l.name}?`)){
+        loans=loans.filter(x=>x.id!==currentId);
+        save();$('#detailCard').style.display='none';
+      }
+    }
+
+    function exportData(){
+      const blob=new Blob([JSON.stringify(loans,null,2)],{type:'application/json'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');a.href=url;a.download='prestadoor_loans.json';
+      document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+    }
+
+    function importData(){
+      const input=document.createElement('input');input.type='file';input.accept='application/json';
+      input.onchange=()=>{const f=input.files[0];if(!f)return;const r=new FileReader();
+        r.onload=()=>{try{const d=JSON.parse(r.result);if(Array.isArray(d)){loans=d;save();$('#detailCard').style.display='none';}else alert('Archivo inválido');}
+        catch(e){alert('No se pudo leer el archivo');}};
+        r.readAsText(f);
+      };input.click();
+    }
+
+    function clearAll(){
+      if(confirm('¿Eliminar todos los préstamos?')){loans=[];save();$('#detailCard').style.display='none';}
+    }
+
+    // Modal foto
+    function showPhoto(src){
+      $('#modalImg').src=src;$('#photoModal').style.display='flex';
+    }
+    $('#photoModal').onclick=()=>$('#photoModal').style.display='none';
+
+    // Eventos
+    $('#newLoanBtn').onclick=newLoan;
+    $('#saveBtn').onclick=saveLoan;
+    $('#cancelBtn').onclick=()=>$('#detailCard').style.display='none';
+    $('#addPaymentBtn').onclick=addPayment;
+    $('#deleteBtn').onclick=deleteLoan;
+    $('#exportBtn').onclick=exportData;
+    $('#importBtn').onclick=importData;
+    $('#clearBtn').onclick=clearAll;
+    $('#searchInput').oninput=renderList;
+    $('#statusFilter').onchange=renderList;
+    $('#cedulaInput').oninput=()=>$('#cedulaInput').value=formatCedula($('#cedulaInput').value);
+
+    load();
+
+  </script>
+</body>
+</html>
