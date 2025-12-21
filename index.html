@@ -385,6 +385,32 @@ $('#formModal').onclick = (e) => {
   }
 };
 
+// Control doble toque en botón atrás (Android)
+let backPressedOnce = false;
+
+window.addEventListener('popstate', (event) => {
+  if (backPressedOnce) {
+    // Segundo toque rápido → salir
+    history.go(-2); // retrocede realmente
+  } else {
+    // Primer toque → aviso y esperar segundo
+    backPressedOnce = true;
+    alert("Pulsa atrás otra vez rápido para salir");
+
+    // Reinicia el estado después de 2 segundos
+    setTimeout(() => {
+      backPressedOnce = false;
+    }, 2000);
+    
+    // Empuja un estado falso para que el primer atrás no cierre
+    history.pushState(null, null, location.href);
+  }
+});
+
+// Empuja un estado inicial para capturar atrás
+history.pushState(null, null, location.href);
+
+
   </script>
 </body>
 </html>
