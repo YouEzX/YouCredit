@@ -27,7 +27,7 @@
     .btn.success{background:var(--accent)}
     .grid{display:grid;gap:12px;grid-template-columns:1fr}
     @media(min-width:880px){.grid{grid-template-columns:1fr 320px}}
-    .card{background:var(--card);border:1px solid #202633;border-radius:16px;padding:12px}
+    .card{background:var(--card);border:1px solid #202633;border-radius:16px;padding:12px;position: relative; /* ✅ necesario para que el botón X se posicione bien */ }
     .card h3{margin:4px 0 10px;font-size:1rem}
     .input,.select{background:#10141a;border:1px solid #202633;color:var(--text);padding:10px 12px;border-radius:12px;width:100%}
     .input:focus,.select:focus{outline:none;border-color:var(--ring);box-shadow:0 0 0 4px rgba(79,140,255,.15)}
@@ -57,20 +57,54 @@
     .modal{display:none;position:fixed;z-index:999;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,.8);align-items:center;justify-content:center}
     .modal img{max-width:90%;max-height:90%;border-radius:12px}
 
-    #formModal {
+#formModal {
   display: none;
   position: fixed;
   z-index: 1000;
   left: 0; top: 0;
   width: 100%; height: 100%;
   background: rgba(0,0,0,.6);
-  align-items: center;
+  align-items: flex-start;    /* ✅ contenido empieza arriba */
   justify-content: center;
+  overflow-y: auto;           /* ✅ scroll vertical en móviles */
+  padding: 16px;              /* espacio alrededor */
 }
 
 #formModal .card {
   max-width: 600px;
   width: 100%;
+  margin: 24px auto;          /* ✅ margen para que no quede pegado arriba */
+}
+
+@media (max-width: 520px) {
+  .card {
+    padding: 16px;            /* ✅ más espacio interno */
+  }
+  .row.two {
+    grid-template-columns: 1fr; /* ✅ filas en una sola columna */
+  }
+  .actions {
+    flex-direction: column;   /* ✅ botones uno debajo del otro */
+  }
+  .actions button {
+    width: 100%;              /* ✅ cada botón ocupa todo el ancho */
+    min-width: unset;
+  }
+}
+
+.close-btn {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  background: transparent;
+  border: none;
+  font-size: 1.5rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.close-btn:hover {
+  color: var(--danger);
 }
 
   </style>
@@ -113,6 +147,7 @@
       <!-- Detalle / Formulario -->
       <div class="modal" id="formModal">
   <section class="card" id="detailCard">
+    <button class="close-btn" id="closeFormBtn">×</button>
         <h3 id="detailTitle">Nuevo préstamo</h3>
 
         <div class="section" id="formSection">
@@ -271,56 +306,101 @@ function newLoan(){
   $('#photoInput').value='';
 }
 
-    async function handlePhotoFile(file){if(!file)return null;return new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result);r.readAsDataURL(file);});}
+// Función para convertir la foto en base64
+async function handlePhotoFile(file){
+  if(!file) return null;
+  return new Promise(res=>{
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.readAsDataURL(file);
+  });
+}
 
-    async function saveLoan(){
-      const name=$('#nameInput').value.trim(),cedula=$('#cedulaInput').value.trim(),amount=Number($('#amountInput').value),dueDate=$('#dueDateInput').value;
-      const phone=$('#phoneInput').value.trim(),location=$('#locationInput').value.trim(),notes=$('#notesInput').value.trim();
-      const photoFile=$('#photoInput').files[0],photo=await handlePhotoFile(photoFile);
-      if(!name||!isValidCedula(cedula)||!(amount>0)||!dueDate||(phone&&phone.replace(/\D/g,'').length<10)){alert('Revisa los campos');return;}
-      if(currentId==null){loans.push({id:Date.now().toString(),name,cedula,amount,dueDate,phone,location,notes,photo:photo||null,payments:[]});}
-      else{const idx=loans.findIndex(l=>l.id===currentId);loans[idx]={...loans[idx],name,cedula,amount,dueDate,phone,location,notes,photo:photo||loans[idx].photo};}
-      save();openDetail(currentId||loans[loans.length-1].id);
-    }
+async function saveLoan(){
+  const name=$('#nameInput').value.trim(),
+        cedula=$('#cedulaInput').value.trim(),
+        amount=Number($('#amountInput').value),
+        dueDate=$('#dueDateInput').value;
+  const phone=$('#phoneInput').value.trim(),
+        location=$('#locationInput').value.trim(),
+        notes=$('#notesInput').value.trim();
+  const photoFile=$('#photoInput').files[0],
+        photo=await handlePhotoFile(photoFile);
 
-    function openDetail(id){
-      const l=loans.find(x=>x.id===id); if(!l)return; currentId=id;$('#formModal').style.display='flex';
-$('#deleteBtn').style.display='inline-block';$('#summarySection').style.display='block';
-      $('#nameInput').value=l.name;$('#cedulaInput').value=l.cedula;$('#amountInput').value=l.amount;$('#dueDateInput').value=l.dueDate;
-      $('#phoneInput').value=l.phone||'';$('#locationInput').value=l.location||'';$('#notesInput').value=l.notes||'';$('#photoInput').value='';
-      const paid=(l.payments||[]).reduce((a,p)=>a+Number(p.amount),0),balance=Math.max(0,l.amount-paid);
-      $('#sumAmount').textContent=currency(l.amount);$('#sumBalance').textContent=currency(balance);
-      $('#paymentsList').innerHTML=(l.payments||[]).map(p=>`<div class="pay-item"><div>${new Date(p.date).toLocaleDateString()}</div><div>${currency(p.amount)}</div></div>`).join('');
-      if(l.phone){$('#whatsappBtn').style.display='inline-block';$('#whatsappBtn').onclick=()=>window.open(`https://wa.me/${l.phone.replace(/\\D/g,'')}`,'_blank');}else $('#whatsappBtn').style.display='none';
-    }
+  if(!name||!isValidCedula(cedula)||!(amount>0)||!dueDate||(phone&&phone.replace(/\D/g,'').length<10)){
+    alert('Revisa los campos');return;
+  }
 
-  function addPayment() {
+  if(currentId==null){
+    loans.push({id:Date.now().toString(),name,cedula,amount,dueDate,phone,location,notes,photo:photo||null,payments:[]});
+  } else {
+    const idx=loans.findIndex(l=>l.id===currentId);
+    loans[idx]={...loans[idx],name,cedula,amount,dueDate,phone,location,notes,photo:photo||loans[idx].photo};
+  }
+
+  save();
+  $('#formModal').style.display='none';  // ✅ cerrar modal al guardar
+}
+
+
+function openDetail(id){
+  const l = loans.find(x => x.id === id);
+  if (!l) return;
+
+  currentId = id;
+  $('#formModal').style.display = 'flex';
+  $('#deleteBtn').style.display = 'inline-block';
+  $('#summarySection').style.display = 'block';
+
+  $('#nameInput').value = l.name;
+  $('#cedulaInput').value = l.cedula;
+  $('#amountInput').value = l.amount;
+  $('#dueDateInput').value = l.dueDate;
+  $('#phoneInput').value = l.phone || '';
+  $('#locationInput').value = l.location || '';
+  $('#notesInput').value = l.notes || '';
+  $('#photoInput').value = '';
+
+  const paid = (l.payments || []).reduce((a, p) => a + Number(p.amount), 0);
+  const balance = Math.max(0, l.amount - paid);
+
+  $('#sumAmount').textContent = currency(l.amount);
+  $('#sumBalance').textContent = currency(balance);
+
+  $('#paymentsList').innerHTML = (l.payments || [])
+    .map(p => `<div class="pay-item"><div>${new Date(p.date).toLocaleDateString()}</div><div>${currency(p.amount)}</div></div>`)
+    .join('');
+
+  if (l.phone) {
+    $('#whatsappBtn').style.display = 'inline-block';
+    $('#whatsappBtn').onclick = () => window.open(`https://wa.me/${l.phone.replace(/\D/g,'')}`, '_blank');
+  } else {
+    $('#whatsappBtn').style.display = 'none';
+  }
+}
+
+
+function addPayment() {
   const l = loans.find(x => x.id === currentId);
   if (!l) return;
 
   const amount = Number($('#paymentInput').value);
   const date = $('#paymentDateInput').value || todayStr();
 
-  if (!(amount > 0)) {
-    alert('Pago inválido');
-    return;
-  }
+  if (!(amount > 0)) { alert('Pago inválido'); return; }
 
   const paid = (l.payments || []).reduce((a, p) => a + Number(p.amount), 0);
   const balance = Math.max(0, l.amount - paid);
 
-  if (amount > balance) {
-    alert('El pago excede el saldo');
-    return;
-  }
+  if (amount > balance) { alert('El pago excede el saldo'); return; }
 
   l.payments.push({ amount, date });
   save();
-  openDetail(currentId);
+
+  $('#formModal').style.display='none';  // ✅ cerrar modal al agregar pago
   $('#paymentInput').value = '';
   $('#paymentDateInput').value = '';
 }
-
 
     function deleteLoan(){
       if(!currentId)return;
@@ -395,7 +475,7 @@ window.addEventListener('popstate', (event) => {
   } else {
     // Primer toque → aviso y esperar segundo
     backPressedOnce = true;
-    alert("Pulsa atrás otra vez rápido para salir");
+    alert("Pulsa atrás otra vez para cerrar la pagina");
 
     // Reinicia el estado después de 2 segundos
     setTimeout(() => {
@@ -410,6 +490,10 @@ window.addEventListener('popstate', (event) => {
 // Empuja un estado inicial para capturar atrás
 history.pushState(null, null, location.href);
 
+// ✅ Evento para cerrar con el botón X
+$('#closeFormBtn').onclick = () => {
+  $('#formModal').style.display = 'none';
+};
 
   </script>
 </body>
