@@ -259,6 +259,7 @@
     .error { font-size: .77rem; color: var(--danger); }
     .divider { height: 1px; background: var(--border); margin: 18px 0; }
     .form-actions { display: flex; gap: 8px; flex-wrap: wrap; padding-top: 16px; margin-top: 4px; border-top: 1px solid var(--border); }
+    .photo-preview { display: none; width: 64px; height: 64px; border-radius: 12px; object-fit: cover; margin-top: 4px; border: 1px solid var(--border-hover); }
     .link-btn { background: none; border: none; color: var(--danger); font-family: inherit; font-size: .76rem; font-weight: 600; cursor: pointer; text-align: left; padding: 4px 0; }
 
     /* ─── SUMMARY */
@@ -499,6 +500,7 @@
         <div class="field">
           <label class="label" for="photoInput">Foto (opcional)</label>
           <input class="input" id="photoInput" type="file" accept="image/*" />
+          <img class="photo-preview" id="photoPreview" alt="Vista previa de la foto" />
           <div class="hint" id="photoHint">Se reduce y se guarda en este dispositivo</div>
           <button type="button" class="link-btn" id="removePhotoBtn" style="display:none">Quitar foto actual</button>
           <div class="error" id="photoError" style="display:none"></div>
@@ -570,6 +572,7 @@
      ═══════════════════════════════════════════════════════════ */
   const STORAGE_KEY = 'prestadoor_loans';
   const EXPORT_KEY  = 'prestadoor_last_export';
+  const DRAFT_KEY   = 'youcredit_draft';   // borrador del formulario abierto
 
   const $ = sel => document.querySelector(sel);
   const currency = v => new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP' }).format(Number(v || 0));
@@ -591,6 +594,7 @@
   let currentId = null;
   let modalOpen = false, pushed = false, saving = false, removePhoto = false;
   let undoSnap = null, toastTimer = null;
+  let pendingPhoto = null, photoBusy = Promise.resolve(), pickingUntil = 0, draftTimer = null;
 
   /* ───────── Almacenamiento seguro ───────── */
   function normalizeLoan(raw) {
@@ -790,12 +794,18 @@
     $('#formModal').style.display = 'none';
     document.body.style.overflow = '';
     modalOpen = false; pushed = false;
+    clearDraft();
   }
   function closeModal() {
     if (modalOpen && pushed && history.state && history.state.m) history.back(); // popstate llama a hideModal
     else hideModal();
   }
-  window.addEventListener('popstate', () => { if (modalOpen) hideModal(); });
+  window.addEventListener('popstate', () => {
+    if (!modalOpen) return;
+    // Al elegir foto, algunos móviles disparan un "atrás" falso: lo ignoramos y mantenemos el formulario
+    if (Date.now() < pickingUntil) { try { history.pushState({ m: 1 }, ''); pushed = true; } catch (e) {} return; }
+    hideModal();
+  });
 
   function clearErrors() {
     document.querySelectorAll('#formModal .error').forEach(e => { e.style.display = 'none'; e.textContent = ''; });
@@ -807,11 +817,57 @@
   }
 
   /* ───────── Formulario ───────── */
-  function resetPhotoUI(hasPhoto) {
-    removePhoto = false;
+  function showPhotoPreview(src) {
+    const im = $('#photoPreview');
+    if (src) { im.src = src; im.style.display = 'block'; } else { im.removeAttribute('src'); im.style.display = 'none'; }
+  }
+  function resetPhotoUI(currentPhoto) {
+    removePhoto = false; pendingPhoto = null;
     $('#photoInput').value = '';
-    $('#removePhotoBtn').style.display = hasPhoto ? 'inline-block' : 'none';
-    $('#photoHint').textContent = hasPhoto ? 'Ya tiene foto. Elige otra para reemplazarla.' : 'Se reduce y se guarda en este dispositivo';
+    showPhotoPreview(currentPhoto);
+    $('#removePhotoBtn').style.display = currentPhoto ? 'inline-block' : 'none';
+    $('#photoHint').textContent = currentPhoto ? 'Ya tiene foto. Elige otra para reemplazarla.' : 'Se reduce y se guarda en este dispositivo';
+  }
+
+  // La foto se procesa en cuanto la eliges (no al guardar): así no se pierde si el móvil recarga la página
+  function onPhotoChosen() {
+    const file = $('#photoInput').files[0];
+    pickingUntil = Date.now() + 2500;
+    if (!file) return;
+    $('#photoError').style.display = 'none'; $('#photoInput').classList.remove('invalid');
+    $('#photoHint').textContent = 'Procesando foto…';
+    photoBusy = compressImage(file).then(data => {
+      pendingPhoto = data; removePhoto = false;
+      showPhotoPreview(data);
+      $('#removePhotoBtn').style.display = 'inline-block';
+      $('#photoHint').textContent = 'Foto lista. Se guardará con el préstamo.';
+      saveDraft();
+    }).catch(() => {
+      pendingPhoto = null;
+      $('#photoHint').textContent = 'Se reduce y se guarda en este dispositivo';
+      setError('photoInput', 'photoError', 'No se pudo leer la imagen. Prueba con otra.');
+    });
+  }
+
+  /* ───────── Borrador (por si el móvil recarga la página al abrir la cámara/galería) ───────── */
+  const DRAFT_FIELDS = ['nameInput', 'cedulaInput', 'amountInput', 'dueDateInput', 'phoneInput', 'locationInput', 'notesInput'];
+  function saveDraft() {
+    if (!modalOpen) return;
+    const d = { ts: Date.now(), id: currentId, removePhoto, photo: pendingPhoto };
+    DRAFT_FIELDS.forEach(f => d[f] = $('#' + f).value);
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch (e) {}
+  }
+  function clearDraft() { clearTimeout(draftTimer); try { localStorage.removeItem(DRAFT_KEY); } catch (e) {} }
+  function restoreDraft() {
+    let d = null;
+    try { d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null'); } catch (e) {}
+    if (!d || Date.now() - d.ts > 2 * 3600 * 1000) { clearDraft(); return; }
+    if (d.id) { if (!loans.find(l => l.id === d.id)) { clearDraft(); return; } openDetail(d.id); } else newLoan();
+    DRAFT_FIELDS.forEach(f => { if (d[f] != null) $('#' + f).value = d[f]; });
+    if (d.photo) { pendingPhoto = d.photo; showPhotoPreview(d.photo); $('#removePhotoBtn').style.display = 'inline-block'; $('#photoHint').textContent = 'Foto lista. Se guardará con el préstamo.'; }
+    else if (d.removePhoto) { removePhoto = true; showPhotoPreview(null); $('#removePhotoBtn').style.display = 'none'; $('#photoHint').textContent = 'La foto se quitará al guardar.'; }
+    saveDraft();
+    toast('Recuperamos lo que estabas escribiendo');
   }
 
   function newLoan() {
@@ -823,7 +879,7 @@
     $('#summarySection').style.display = 'none';
     ['#nameInput', '#cedulaInput', '#amountInput', '#phoneInput', '#locationInput', '#notesInput'].forEach(s => $(s).value = '');
     $('#dueDateInput').value = todayStr();
-    resetPhotoUI(false);
+    resetPhotoUI(null);
     openModal();
   }
 
@@ -849,7 +905,6 @@
     const name = $('#nameInput').value.trim(), cedula = $('#cedulaInput').value.trim();
     const amount = r2(parseMoney($('#amountInput').value)), dueDate = $('#dueDateInput').value;
     const phone = $('#phoneInput').value.trim(), location = $('#locationInput').value.trim(), notes = $('#notesInput').value.trim();
-    const file = $('#photoInput').files[0];
     const cur = currentId ? loans.find(l => l.id === currentId) : null;
 
     let firstBad = null;
@@ -867,11 +922,8 @@
 
     saving = true; $('#saveBtn').disabled = true;
     try {
-      let photo;
-      if (file) {
-        try { photo = await compressImage(file); }
-        catch (e) { setError('photoInput', 'photoError', 'No se pudo leer la imagen. Prueba con otra.'); return; }
-      }
+      await photoBusy;                 // por si la foto aún se está procesando
+      const photo = pendingPhoto;
       const prev = loans;
       if (!cur) {
         loans = [...loans, { id: uid(), name, cedula, amount, dueDate, phone, location, notes, photo: photo || null, payments: [] }];
@@ -895,7 +947,7 @@
     $('#nameInput').value = l.name; $('#cedulaInput').value = l.cedula;
     $('#amountInput').value = l.amount; $('#dueDateInput').value = l.dueDate;
     $('#phoneInput').value = l.phone; $('#locationInput').value = l.location; $('#notesInput').value = l.notes;
-    resetPhotoUI(!!l.photo);
+    resetPhotoUI(l.photo);
     $('#paymentInput').value = ''; $('#paymentDateInput').value = todayStr();
     renderDetail();
     openModal();
@@ -1051,13 +1103,21 @@
   $('#searchInput').oninput = renderList;
   $('#statusFilter').onchange = renderList;
   $('#cedulaInput').oninput = e => { e.target.value = formatCedula(e.target.value); };
-  $('#removePhotoBtn').onclick = () => { removePhoto = true; $('#photoInput').value = ''; $('#removePhotoBtn').style.display = 'none'; $('#photoHint').textContent = 'La foto se quitará al guardar.'; };
+  $('#removePhotoBtn').onclick = () => {
+    removePhoto = true; pendingPhoto = null; $('#photoInput').value = '';
+    showPhotoPreview(null); $('#removePhotoBtn').style.display = 'none';
+    $('#photoHint').textContent = 'La foto se quitará al guardar.'; saveDraft();
+  };
+  $('#photoInput').addEventListener('click', () => { pickingUntil = Date.now() + 90000; });   // el selector puede tardar
+  $('#photoInput').addEventListener('change', onPhotoChosen);
+  window.addEventListener('focus', () => { if (pickingUntil > Date.now()) pickingUntil = Date.now() + 2500; });
+  DRAFT_FIELDS.forEach(f => $('#' + f).addEventListener('input', () => { clearTimeout(draftTimer); draftTimer = setTimeout(saveDraft, 300); }));
   $('#paymentsList').addEventListener('click', e => { const b = e.target.closest('.pay-del'); if (b) deletePayment(b.dataset.pid); });
   $('#agenda').addEventListener('click', e => {
     const c = e.target.closest('.chip'); if (!c) return;
     const sel = $('#statusFilter'); sel.value = sel.value === c.dataset.filter ? 'all' : c.dataset.filter; renderList();
   });
-  $('#formModal').addEventListener('click', e => { if (e.target.id === 'formModal') closeModal(); });
+  $('#formModal').addEventListener('click', e => { if (e.target.id === 'formModal' && Date.now() > pickingUntil) closeModal(); });
   $('#photoModal').onclick = hidePhoto;
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
@@ -1128,6 +1188,7 @@
   }
 
   load();
+  restoreDraft();
 </script>
 </body>
 </html>
